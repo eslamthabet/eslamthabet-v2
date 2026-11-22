@@ -1,33 +1,64 @@
-/* عدّل videos.js لإدارة الأعمال. هذا الملف مسؤول عن العرض والفلاتر واللغة. */
-(() => {
-  const allowed = ['youtube.com','www.youtube.com','m.youtube.com','youtu.be','tiktok.com','www.tiktok.com','vm.tiktok.com','vt.tiktok.com','instagram.com','www.instagram.com'];
-  const valid = (items) => (Array.isArray(items) ? items : []).filter(v => {try {const u=new URL(v.url);return u.protocol==='https:'&&allowed.includes(u.hostname)}catch{return false}});
-  const platformName=v=>new URL(v.url).hostname.includes('instagram')?'INSTAGRAM':new URL(v.url).hostname.includes('tiktok')?'TIKTOK':'YOUTUBE';
-  const works=valid(window.PORTFOLIO_VIDEOS),ads=valid(window.PORTFOLIO_ADS);
-  let language='ar',filter='all',slide=0;
-  const grid=document.getElementById('video-grid'),adsGrid=document.getElementById('ads-grid');
-  const text=(v,key)=>language==='en'?(v[key+'En']||v[key]):v[key];
-  function image(v){const img=document.createElement('img');try{const u=new URL(v.thumbnail,document.baseURI);if(['http:','https:','file:'].includes(u.protocol))img.src=v.thumbnail}catch{}img.alt=text(v,'title');img.loading='lazy';img.width=640;img.height=480;img.addEventListener('error',()=>img.src='assets/video-fallback.svg',{once:true});return img}
-  function link(v){const a=document.createElement('a');a.href=v.url;a.target='_blank';a.rel='noopener noreferrer';a.setAttribute('aria-label',text(v,'title')+(language==='ar'?'، مشاهدة الفيديو في نافذة جديدة':', watch video in a new tab'));return a}
-  function card(v,n){const a=link(v);a.className='video-card';const frame=document.createElement('div');frame.className='video-image';const platform=document.createElement('span');platform.className='platform';platform.dir='ltr';platform.textContent=platformName(v);const play=document.createElement('span');play.className='play';play.textContent='▶';play.setAttribute('aria-hidden','true');frame.append(image(v),platform,play);const info=document.createElement('div');info.className='video-info';const number=document.createElement('span');number.className='video-number';number.textContent=String(n+1).padStart(2,'0');const h=document.createElement('h3');h.textContent=text(v,'title');h.dir=language==='ar'?'rtl':'ltr';const p=document.createElement('p');p.textContent=text(v,'description')||'';const arrow=document.createElement('span');arrow.className='card-arrow';arrow.textContent='↗';arrow.setAttribute('aria-hidden','true');info.append(number,h,p,arrow);a.append(frame,info);return a}
-  function render(){grid.replaceChildren();works.forEach((v,i)=>{if(filter==='all'||v.category===filter)grid.append(card(v,i))});adsGrid.replaceChildren();ads.forEach((v,i)=>{const a=card(v,i);a.querySelector('img').loading='eager';a.classList.add('ad-card');a.classList.add(v.format==='wide'?'ad-wide':'ad-portrait');adsGrid.append(a)});requestAnimationFrame(()=>adPosition(false));document.getElementById('ads-section').hidden=!ads.length;document.getElementById('work-count').textContent=String(works.length).padStart(2,'0')+' '+(language==='ar'?'أعمال':'PROJECTS')}
-  let adIndex=0,adPaused=false,adTimer;
-  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function adPosition(move=true){const cards=[...adsGrid.children];if(!cards.length)return;adIndex=Math.max(0,Math.min(adIndex,cards.length-1));cards.forEach((x,i)=>x.classList.toggle('is-active',i===adIndex));const a=cards[adIndex];if(move)adsGrid.scrollTo({left:a.offsetLeft-(adsGrid.clientWidth-a.clientWidth)/2,behavior:reduced?'instant':'smooth'});document.getElementById('ad-counter').textContent=String(adIndex+1).padStart(2,'0')+' / '+String(cards.length).padStart(2,'0');document.querySelector('.ad-progress span').style.width=((adIndex+1)/cards.length*100)+'%'}
-  function adStep(n){adIndex=(adIndex+n+ads.length)%ads.length;adPosition()}
-  document.getElementById('ad-prev').addEventListener('click',()=>adStep(-1));document.getElementById('ad-next').addEventListener('click',()=>adStep(1));
-  document.getElementById('ad-pause').addEventListener('click',e=>{adPaused=!adPaused;e.currentTarget.setAttribute('aria-pressed',String(adPaused));e.currentTarget.textContent=adPaused?'▶':'Ⅱ'});
-  adsGrid.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){e.preventDefault();adStep(1)}if(e.key==='ArrowLeft'){e.preventDefault();adStep(-1)}});
-  let adScrollTimer;adsGrid.addEventListener('scroll',()=>{clearTimeout(adScrollTimer);adScrollTimer=setTimeout(()=>{const mid=adsGrid.scrollLeft+adsGrid.clientWidth/2;let distance=Infinity;[...adsGrid.children].forEach((a,i)=>{const d=Math.abs(a.offsetLeft+a.clientWidth/2-mid);if(d<distance){distance=d;adIndex=i}});adPosition(false)},120)},{passive:true});
-  let adHover=false;document.querySelector('.ad-stage').addEventListener('mouseenter',()=>adHover=true);document.querySelector('.ad-stage').addEventListener('mouseleave',()=>adHover=false);
-  if(!reduced)setInterval(()=>{if(!ads.length||adPaused||adHover||document.hidden||document.querySelector('.ad-stage').contains(document.activeElement))return;const b=adsGrid.getBoundingClientRect();if(b.top<innerHeight&&b.bottom>0)adStep(1)},5200);
-  // Capture only authored static text, not gallery entries. The originals stay in memory for EN.
-  const translations=window.PORTFOLIO_TRANSLATIONS||{};
-  const nodes=[];const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let node;
-  while(node=walker.nextNode()){if(['SCRIPT','STYLE','NOSCRIPT'].includes(node.parentElement.tagName))continue;const source=node.textContent.trim();if(translations[source])nodes.push({node,source,before:node.textContent.match(/^\s*/)[0],after:node.textContent.match(/\s*$/)[0]})}
-  const attrs=[];document.querySelectorAll('[aria-label],[alt]').forEach(el=>['aria-label','alt'].forEach(name=>{const source=el.getAttribute(name);if(source&&translations[source])attrs.push({el,name,source})}));
-  function setLanguage(next){language=next;document.querySelector('meta[name=description]').content=next==='ar'?'إسلام ثابت، صانع فيديو وحكايات بصرية بالذكاء الاصطناعي. إعلانات منتجات ومحتوى للسوشيال ميديا.':'Eslam Thabet, AI video creator. Cinematic visual stories, product ads and AI UGC for brands.';document.documentElement.lang=next;document.documentElement.dir=next==='ar'?'rtl':'ltr';nodes.forEach(x=>x.node.textContent=x.before+(next==='en'?translations[x.source]:x.source)+x.after);attrs.forEach(x=>x.el.setAttribute(x.name,next==='en'?translations[x.source]:x.source));document.querySelectorAll('[data-language]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.language===next)));document.title=next==='ar'?'إسلام ثابت | صانع فيديو بالذكاء الاصطناعي':'Eslam Thabet | AI Creative Portfolio';render();renderSocials()}
-  function renderSocials(){const box=document.getElementById('social-links');box.replaceChildren();(window.PORTFOLIO_SOCIALS||[]).forEach(v=>{const a=document.createElement('a');a.href=v.url;a.target='_blank';a.rel='noopener noreferrer';const icon=document.createElement('span');icon.className='social-icon';icon.setAttribute('aria-hidden','true');icon.innerHTML=v.icon;const name=document.createElement('span');name.textContent=v.name;name.dir='ltr';const value=document.createElement('strong');value.dir='ltr';value.textContent=v.count;const label=document.createElement('small');label.textContent=language==='ar'?(v.name==='YouTube'?'مشترك':'متابع'):(v.name==='YouTube'?'subscribers':'followers');a.append(icon,name,value,label);box.append(a)})}
-  document.querySelectorAll('[data-language]').forEach(b=>b.addEventListener('click',()=>setLanguage(b.dataset.language)));
-  setLanguage('ar');
-})();
+const config = {
+  sliderInterval: 4200,
+  profile: "assets/profile.png"
+};
+
+const revealObserver = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{ if(e.isIntersecting) e.target.classList.add("visible"); });
+},{threshold:.12});
+document.querySelectorAll(".reveal").forEach(el=>revealObserver.observe(el));
+
+const slides=[...document.querySelectorAll(".slide")];
+const dots=document.querySelector(".dots");
+let current=0;
+slides.forEach((_,i)=>{
+  const d=document.createElement("button");
+  d.className="dot"+(i===0?" active":"");
+  d.setAttribute("aria-label",`Slide ${i+1}`);
+  d.onclick=()=>showSlide(i);
+  dots.appendChild(d);
+});
+const dotEls=[...document.querySelectorAll(".dot")];
+function showSlide(i){
+  current=(i+slides.length)%slides.length;
+  slides.forEach((s,n)=>s.classList.toggle("active",n===current));
+  dotEls.forEach((d,n)=>d.classList.toggle("active",n===current));
+}
+document.querySelector(".next").onclick=()=>showSlide(current+1);
+document.querySelector(".prev").onclick=()=>showSlide(current-1);
+setInterval(()=>showSlide(current+1),config.sliderInterval);
+
+document.querySelectorAll(".filter").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll(".filter").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    const f=btn.dataset.filter;
+    document.querySelectorAll(".work-card").forEach(card=>{
+      card.style.display=(f==="all"||card.dataset.category===f)?"block":"none";
+    });
+  });
+});
+
+document.querySelector(".menu").addEventListener("click",()=>{
+  const nav=document.querySelector(".nav nav");
+  const open=nav.style.display==="flex";
+  nav.style.display=open?"none":"flex";
+  if(!open){
+    nav.style.position="absolute";
+    nav.style.top="70px";
+    nav.style.left="20px";
+    nav.style.right="20px";
+    nav.style.padding="20px";
+    nav.style.flexDirection="column";
+    nav.style.background="rgba(7,8,13,.96)";
+    nav.style.border="1px solid #222";
+    nav.style.borderRadius="16px";
+  }
+});
+
+document.querySelectorAll('a[href^="#"]').forEach(a=>{
+  a.addEventListener("click",()=>{
+    const nav=document.querySelector(".nav nav");
+    if(window.innerWidth<=900) nav.style.display="none";
+  });
+});
